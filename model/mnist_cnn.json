@@ -1,0 +1,47 @@
+{
+  "best_test_acc": 0.9908,
+  "final_test_acc": 0.9908,
+  "epochs": 5,
+  "batch_size": 128,
+  "lr": 0.001,
+  "device": "cpu",
+  "model_path": "model/mnist_cnn.pt",
+  "model_params": 430890,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.5465,
+      "test_loss": 0.0497,
+      "test_acc": 0.984,
+      "seconds": 98.0
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.2129,
+      "test_loss": 0.0337,
+      "test_acc": 0.9884,
+      "seconds": 93.5
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.171,
+      "test_loss": 0.0297,
+      "test_acc": 0.9898,
+      "seconds": 93.0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.1507,
+      "test_loss": 0.0288,
+      "test_acc": 0.9903,
+      "seconds": 88.4
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.1447,
+      "test_loss": 0.0257,
+      "test_acc": 0.9908,
+      "seconds": 89.7
+    }
+  ]
+}

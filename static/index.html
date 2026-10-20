@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNIST — Reconnaissance de chiffres</title>
+<style>
+  :root {
+    --bg: #0f1220; --panel: #171b2f; --panel2: #1e2340; --border: #2b3157;
+    --text: #e8eaf6; --muted: #9aa2c9; --accent: #5b8cff; --ok: #35d49a; --ko: #ff6b81;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  header .badge {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 3px 12px; font-size: 13px;
+  }
+  header .badge b { color: var(--ok); font-weight: 650; }
+  main { display: grid; gap: 20px; padding: 20px 24px 40px; max-width: 1180px; margin: 0 auto; }
+  @media (min-width: 900px) { main { grid-template-columns: minmax(320px, 1fr) minmax(340px, 1fr); } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  #board {
+    width: 100%; max-width: 340px; aspect-ratio: 1; display: block;
+    background: #000; border-radius: 10px; touch-action: none; cursor: crosshair;
+    image-rendering: pixelated; border: 1px solid var(--border);
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 9px; font-size: 14px; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { background: #262c52; border-color: #3c4478; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #4a7bef; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  label.slider { color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  input[type=range] { accent-color: var(--accent); }
+
+  .result { display: flex; gap: 18px; align-items: center; }
+  .digit {
+    font-size: 64px; font-weight: 700; line-height: 1; min-width: 90px; text-align: center;
+    color: var(--accent);
+  }
+  .digit.unknown { color: var(--muted); font-size: 34px; }
+  .conf { color: var(--muted); font-size: 14px; }
+  .conf b { color: var(--text); font-size: 22px; display: block; }
+  .verdict { font-size: 14px; margin-top: 4px; }
+  .verdict.ok { color: var(--ok); } .verdict.ko { color: var(--ko); }
+
+  .bars { display: grid; gap: 6px; margin-top: 16px; }
+  .bar { display: grid; grid-template-columns: 18px 1fr 54px; gap: 8px; align-items: center; font-size: 13px; }
+  .bar .track { background: var(--panel2); border-radius: 5px; height: 14px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); width: 0; transition: width .35s ease; }
+  .bar.top .fill { background: var(--ok); }
+  .bar .val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .preview-row { display: flex; gap: 16px; align-items: center; margin-top: 6px; }
+  #preview { width: 84px; height: 84px; image-rendering: pixelated;
+    background: #000; border: 1px solid var(--border); border-radius: 6px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+
+  .samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
+  .samples button { padding: 0; background: #000; border: 1px solid var(--border); border-radius: 6px; }
+  .samples img { width: 100%; display: block; image-rendering: pixelated; }
+  .samples button:hover { border-color: var(--accent); }
+
+  .history { list-style: none; margin: 0; padding: 0; max-height: 190px; overflow-y: auto; display: grid; gap: 6px; }
+  .history li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px;
+    background: var(--panel2); border-radius: 7px; padding: 6px 10px; color: var(--muted); }
+  .history li b { color: var(--text); }
+  #status { color: var(--ko); font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .full { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MNIST · Reconnaissance de chiffres manuscrits</h1>
+  <span class="badge" id="infoBadge">modèle…</span>
+  <span class="badge" id="deviceBadge">—</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1 — Dessinez un chiffre</h2>
+    <canvas id="board" width="340" height="340"></canvas>
+    <div class="controls">
+      <button class="primary" id="btnPredict">Prédire</button>
+      <button id="btnUndo">↶ Annuler</button>
+      <button id="btnClear">Effacer</button>
+      <label class="slider">Pinceau <input type="range" id="brush" min="8" max="46" value="22"></label>
+      <label class="slider"><input type="checkbox" id="auto" checked> auto</label>
+    </div>
+    <p id="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>2 — Résultat</h2>
+    <div class="result">
+      <div class="digit unknown" id="predDigit">?</div>
+      <div>
+        <div class="conf">confiance <b id="conf">—</b></div>
+        <div class="verdict" id="verdict"></div>
+      </div>
+      <div style="margin-left:auto; text-align:center">
+        <img id="preview" alt="aperçu 28×28" src="" hidden>
+        <div class="hint" style="margin-top:6px">entrée modèle<br>28×28 normalisée</div>
+      </div>
+    </div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="card">
+    <h2>Échantillons du jeu de test (clic = prédiction)</h2>
+    <div class="samples" id="samples"></div>
+    <p class="hint" id="samplesHint" style="margin-top:10px">chargement…</p>
+  </section>
+
+  <section class="card">
+    <h2>Historique</h2>
+    <ul class="history" id="history"><li>Aucune prédiction pour l'instant.</li></ul>
+  </section>
+</main>
+
+<script>
+const board = document.getElementById('board');
+const ctx = board.getContext('2d');
+const statusEl = document.getElementById('status');
+let drawing = false, last = null, strokes = [], autoTimer = null;
+
+function resetBoard(bg = '#000') {
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, board.width, board.height);
+}
+resetBoard();
+const state = () => ({ lines: strokes.slice() });
+function redraw() {
+  resetBoard();
+  ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const line of strokes) {
+    if (line.length < 1) continue;
+    ctx.lineWidth = line[0].w; ctx.beginPath();
+    ctx.moveTo(line[0].x, line[0].y);
+    for (const p of line.slice(1)) ctx.lineTo(p.x, p.y);
+    if (line.length === 1) { ctx.lineTo(line[0].x + .1, line[0].y); }
+    ctx.stroke();
+  }
+}
+function pos(e) {
+  const r = board.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * board.width / r.width,
+    y: (e.clientY - r.top) * board.height / r.height,
+    w: +document.getElementById('brush').value,
+  };
+}
+board.addEventListener('pointerdown', e => {
+  e.preventDefault(); board.setPointerCapture(e.pointerId);
+  drawing = true; strokes.push([pos(e)]); last = strokes[strokes.length - 1];
+  ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = last[0].w; ctx.beginPath(); ctx.moveTo(last[0].x, last[0].y);
+});
+board.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  const p = pos(e); last.push(p); ctx.lineTo(p.x, p.y); ctx.stroke();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
+  board.addEventListener(ev, () => {
+    if (!drawing) return;
+    drawing = false; maybeAutoPredict();
+  }));
+
+function maybeAutoPredict() {
+  if (!document.getElementById('auto').checked || strokes.length === 0) return;
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => predict(board.toDataURL('image/png')), 350);
+}
+
+document.getElementById('btnClear').onclick = () => { strokes = []; redraw(); clearResult(); };
+document.getElementById('btnUndo').onclick = () => { strokes.pop(); redraw(); maybeAutoPredict(); };
+document.getElementById('btnPredict').onclick = () => predict(board.toDataURL('image/png'));
+
+// ---------------------------------------------------------------- result ----
+const barsEl = document.getElementById('bars');
+for (let i = 0; i < 10; i++) {
+  const row = document.createElement('div');
+  row.className = 'bar'; row.dataset.cls = i;
+  row.innerHTML = `<span>${i}</span><span class="track"><span class="fill"></span></span><span class="val">0 %</span>`;
+  barsEl.appendChild(row);
+}
+function clearResult() {
+  document.getElementById('predDigit').textContent = '?';
+  document.getElementById('predDigit').className = 'digit unknown';
+  document.getElementById('conf').textContent = '—';
+  document.getElementById('verdict').textContent = '';
+  document.getElementById('preview').hidden = true;
+  document.querySelectorAll('.bar').forEach(r => {
+    r.classList.remove('top'); r.querySelector('.fill').style.width = '0';
+    r.querySelector('.val').textContent = '0 %';
+  });
+}
+function showResult(res, expected = null) {
+  const d = document.getElementById('predDigit');
+  d.textContent = res.pred; d.className = 'digit';
+  document.getElementById('conf').textContent = (res.confidence * 100).toFixed(1) + ' %';
+  const v = document.getElementById('verdict');
+  if (expected === null) { v.textContent = ''; v.className = 'verdict'; }
+  else if (expected === res.pred) { v.textContent = `✓ juste (vrai label ${expected})`; v.className = 'verdict ok'; }
+  else { v.textContent = `✗ faux (vrai label ${expected})`; v.className = 'verdict ko'; }
+
+  const preview = document.getElementById('preview');
+  preview.src = res.preview; preview.hidden = false;
+
+  res.probs.forEach((p, i) => {
+    const row = barsEl.querySelector(`.bar[data-cls="${i}"]`);
+    row.classList.toggle('top', i === res.pred);
+    row.querySelector('.fill').style.width = (p * 100) + '%';
+    row.querySelector('.val').textContent = (p * 100).toFixed(1) + ' %';
+  });
+}
+
+let seq = 0;
+async function predict(dataUrl, expected = null) {
+  const id = ++seq;
+  statusEl.textContent = '';
+  try {
+    const r = await fetch('/api/predict', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+    const res = await r.json();
+    if (id !== seq) return;
+    if (!r.ok) { statusEl.textContent = '⚠ ' + (res.error || 'erreur serveur'); return; }
+    showResult(res, expected);
+    pushHistory(res, expected);
+  } catch (e) { statusEl.textContent = '⚠ ' + e.message; }
+}
+
+function pushHistory(res, expected) {
+  const ul = document.getElementById('history');
+  if (ul.firstElementChild.textContent.startsWith('Aucune')) ul.innerHTML = '';
+  const li = document.createElement('li');
+  const time = new Date().toLocaleTimeString('fr-FR');
+  li.innerHTML = `<span>${time}</span><span>prédit <b>${res.pred}</b> à ${(res.confidence * 100).toFixed(1)} %` +
+    (expected !== null ? ` · vrai <b>${expected}</b> ${expected === res.pred ? '✓' : '✗'}` : '') + `</span>`;
+  ul.prepend(li);
+  while (ul.children.length > 30) ul.lastElementChild.remove();
+}
+
+// --------------------------------------------------------------- samples ----
+async function loadSamples() {
+  const box = document.getElementById('samples');
+  try {
+    const samples = await (await fetch('/api/samples')).json();
+    if (samples.error) throw new Error(samples.error);
+    samples.forEach(s => {
+      const b = document.createElement('button');
+      b.title = `vrai label : ${s.label}`;
+      b.innerHTML = `<img src="${s.image}" alt="${s.label}">`;
+      b.onclick = () => predict(s.image, s.label);
+      box.appendChild(b);
+    });
+    document.getElementById('samplesHint').textContent =
+      `${samples.length} chiffres du jeu de test — le vrai label est affiché après prédiction.`;
+  } catch (e) {
+    document.getElementById('samplesHint').textContent = '⚠ échantillons indisponibles : ' + e.message;
+  }
+}
+
+// ------------------------------------------------------------------ info ----
+async function loadInfo() {
+  try {
+    const info = await (await fetch('/api/info')).json();
+    document.getElementById('infoBadge').innerHTML =
+      `modèle entraîné époque ${info.epoch} · <b>test ${(info.test_acc * 100).toFixed(2)} %</b>`;
+    document.getElementById('deviceBadge').textContent = `${info.arch} · ${info.device}`;
+  } catch (e) { document.getElementById('infoBadge').textContent = 'modèle indisponible'; }
+}
+loadInfo(); loadSamples();
+</script>
+</body>
+</html>
